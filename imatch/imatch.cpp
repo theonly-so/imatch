@@ -4,7 +4,7 @@
 #include "stdafx.h"
 #include "mystruct.h"
 #include <fstream>
-#include<fftw3.h>
+//#include<fftw3.h>
 using namespace cv;
 matches_HOPC HOPC_match(Mat im_Ref, Mat im_Sen, const char* CP_Check_file, double disthre = 1.5, int tranFlag = 3, int templatesize = 100, int searchRad = 10);
 Mat HarrisValue(Mat &inputimg);
