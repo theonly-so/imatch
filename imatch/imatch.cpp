@@ -92,7 +92,8 @@ matches_HOPC HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file,double d
 		//判断是否在边界内
 
 		Mat des1 = getDesc(denseRef, int(xy[n].y), int(xy[n].x), interval,templateRad);
-		//还未归一化 
+		//归一化
+		descNormalize(des1, NORM_L2);
 		int si, sj;//搜索中心 现在是和左图一样
 		si = (int)xy[n].y;
 		sj = (int)xy[n].x;
@@ -107,10 +108,13 @@ matches_HOPC HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file,double d
 				int r = si + i;
 				int c = sj + j;
 				Mat des2=getDesc(denseSen, r, c, interval, templateRad);
+				descNormalize(des2, NORM_L2);
 				matchvalue[(i+searchRad)*(2 * searchRad + 1)+j+searchRad]=calculateCoe(des1, des2);
 			}
 		}
-		//判断是否能匹配上
+		//寻找相关系数最大的点
+		vector<double>::iterator maxvalue = max_element(matchvalue.begin(), matchvalue.end());
+		int maxindex = distance(matchvalue.begin(), maxvalue);
 
 	}
 	return{};
@@ -690,9 +694,18 @@ Mat denseBlockHOPC(vector<Mat> &PC,const int blocksize, const int cellsize, cons
 
 Mat getDesc(const Mat& descriptors, const int row, const int col, const int interval,const int template_radius)
 {
-	int len1 = descriptors.channels();
-	int len = 9 * len1;
-	Mat result = Mat::zeros(len, 1, CV_32F);
+	//函数功能 :
+	//			从整张图的密集特征返回某一个点的描述子
+	//输入参数 :
+	//			descriptors : 向量X
+	//			row : 行
+	//			col : 列
+	//			interval : 间隔
+	//			template_radius : 模板半径
+	//返回值：
+	//			9*块描述子 大小的特征向量
+	int len = descriptors.channels();
+	Mat result = Mat::zeros(9, len , CV_32F);
 	if (row < template_radius || col < template_radius || row >= descriptors.rows - template_radius || col >= descriptors.cols - template_radius)
 	{
 		return result;
@@ -701,11 +714,11 @@ Mat getDesc(const Mat& descriptors, const int row, const int col, const int inte
 	{
 		for (int j = 0; j < 3; j++)
 		{
-			for (int n = 0; n < len1; n++)
+			for (int n = 0; n < len; n++)
 			{
-				int r = row - (i - 1)*interval;
+				int r = row + (i - 1)*interval;
 				int c = (col + (j - 1)*interval)*len + n;
-				result.at<float>(3 * i + j + n, 0) = descriptors.at<float>(r, c);
+				result.at<float>(3 * i + j, n) = descriptors.at<float>(r, c);
 			}
 		}
 	}
@@ -714,7 +727,8 @@ Mat getDesc(const Mat& descriptors, const int row, const int col, const int inte
 
 double calculateCoe(const Mat& X,const Mat& Y)
 {
-	//计算相关系数
+	//函数功能 :
+	//			计算相关系数
 	//输入参数 :
 	//			X : 向量X
 	//			Y : 向量Y
@@ -743,4 +757,21 @@ double calculateCoe(const Mat& X,const Mat& Y)
 	int size = rows*cols*n_channel;
 	double value = (glgr - gl*gr / size) / sqrt((gl2 - gl*gl / size)*(gr2 - gr*gr / size));
 	return value;
+}
+
+bool descNormalize(Mat& desc, int type)
+{
+	//函数功能 :
+	//			归一化特征向量(行归一化)
+	//输入参数 :
+	//			desc : 特征向量
+	//			type : 归一化方法
+	//返回值：
+	//			成功返回true,失败返回false
+	int rows = desc.rows;
+	for (int i = 0; i < rows; i++)
+	{
+		normalize(desc.rowRange(i, i + 1), desc.rowRange(i, i + 1), 1, 0, type);
+	}
+	return true;
 }
