@@ -11,11 +11,15 @@ Mat HarrisValue(Mat &inputimg);
 vector<Point> nonmaxsupptsgrid(Mat& cim, int radius, double thresh, int gridNum, int PTnum);
 vector<Mat> phasecong_hopc(Mat &im, int nscale, int norient);
 Mat denseBlockHOPC(vector<Mat> &PC, const int blocksize = 3, const int cellsize = 4, const int oribins = 8);
+Mat getDesc(const Mat& descriptors, const int row, const int col, const int interval, const int template_radius);
+bool descNormalize(Mat& desc, int type);
+double calculateCoe(const Mat& X, const Mat& Y);
+
 int main()
 {
-	Mat im_Ref = imread("E:\\论文\\多源影像匹配\\HOPC code and supply\\data\\optical_ref.png");
-	Mat im_Sen = imread("E:\\论文\\多源影像匹配\\HOPC code and supply\\data\\SAR_sen.png");
-	const char* checkfile = "E:\\论文\\多源影像匹配\\HOPC code and supply\\data\\OpticaltoSAR_CP.txt";
+	Mat im_Ref = imread("..\\data\\optical_ref.png");
+	Mat im_Sen = imread("..\\data\\SAR_sen.png");
+	const char* checkfile = "..\\data\\OpticaltoSAR_CP.txt";
 	HOPC_match(im_Ref, im_Sen, checkfile);
     return 0;
 }
