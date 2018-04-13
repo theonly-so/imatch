@@ -4,6 +4,7 @@
 #include "stdafx.h"
 #include "mystruct.h"
 #include <fstream>
+#include<ctime>
 //#include<fftw3.h>
 using namespace cv;
 vector<match_point> HOPC_match(Mat im_Ref, Mat im_Sen, const char* CP_Check_file, const char* match_file, double disthre = 1.5, int tranFlag = 3, int templatesize = 100, int searchRad = 10);
@@ -15,15 +16,22 @@ Mat getDesc(const Mat& descriptors, const int row, const int col, const int inte
 bool descNormalize(Mat& desc, int type);
 double calculateCoe(const Mat& X, const Mat& Y);
 bool saveMatches(const vector<match_point>& matches, const char* matchfile);
-
+void drawMatches(vector<match_point>& matches, size_t num, Mat& Left, Mat& Right);
 int main()
 {
-	Mat im_Ref = imread("..\\data\\optical_ref.png");
-	Mat im_Sen = imread("..\\data\\SAR_sen.png");
+	Mat im_Ref = imread("..\\data\\visible_ref.tif");
+	Mat im_Sen = imread("..\\data\\visible_ref.tif");
 	const char* checkfile = "..\\data\\OpticaltoSAR_CP.txt";
-	const char* matchfile = "..\\optical_SAR.match";
+	const char* matchfile = "..\\visible_infrared.match";
 	vector<match_point> matches=HOPC_match(im_Ref, im_Sen, checkfile, matchfile);
+	//std::sort(matches.begin(), matches.end(), greater<match_point>());
 	saveMatches(matches, matchfile);
+	drawMatches(matches, matches.size(), im_Ref, im_Sen);
+	imshow("m1", im_Ref);
+	imshow("m2", im_Sen);
+	cvWaitKey(0);
+	imwrite("m1.jpg", im_Ref);
+	imwrite("m2.jpg", im_Sen);
     return 0;
 }
 
@@ -133,12 +141,12 @@ vector<match_point> HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file, 
 		int maxindex = distance(matchvalue.begin(), maxvalue);
 		match_point mt;
 		mt.left = xy[n];
-		mt.right.y = maxindex / (2 * searchRad + 1);
-		mt.right.x = maxindex % (2 * searchRad + 1);
+		mt.right.y = si + maxindex / (2 * searchRad + 1) - searchRad;
+		mt.right.x = sj + maxindex % (2 * searchRad + 1) - searchRad;
 		mt.measure = *maxvalue;
+		matches.push_back(mt);
 	}
-
-	return{};
+	return matches;
 }
 
 Mat Gaussian_kernal(int kernel_size, double sigma)
@@ -341,14 +349,19 @@ Mat absComplex(Mat &input)
 
 vector<Mat> phasecong_hopc(Mat &im, int nscale, int norient)
 {
+	//函数功能 :
+	//			计算相位一致性梯度和方向矩阵
 	//输入参数 :
 	//			im : 待处理的灰度图像
 	//			nscale : log gabor尺度的数量
 	//			norient : log gabor方向的数量
 	//返回值：
-	//			特征点的行列号
+	//			梯度矩阵 方向矩阵 (vector形式存储)
 
 	cout << "phasecong_hopc is running......" << endl;
+	clock_t clockstart, clockend;
+	clockstart = clock();
+
 	//预定义变量
 	double dThetaOnSigma = 1.7;
 	double minWaveLength = 3;
@@ -634,12 +647,26 @@ vector<Mat> phasecong_hopc(Mat &im, int nscale, int norient)
 	vector<Mat> rValue;
 	rValue.push_back(phaseCongruency);
 	rValue.push_back(or );
+
+	clockend = clock();
+	cout << "phasecong_hopc is finished. Time cost: " << clockend - clockstart << endl;
 	return rValue;
 }
 
 Mat denseBlockHOPC(vector<Mat> &PC,const int blocksize, const int cellsize, const int oribins)
 {
+	//函数功能 :
+	//			计算整张图像的密集block描述
+	//输入参数 :
+	//			PC : 幅度和方向
+	//			blocksize : 每个block包含 blocksize*blocksize 个cell
+	//			cellsize : 每个cell包含
+	//返回值：
+	//			梯度矩阵 方向矩阵 (vector形式存储)
 	cout << "denseBlockHOPC is running......" << endl;
+	clock_t clockstart, clockend;
+	clockstart = clock();
+
 	Mat pc = PC[0];
 	Mat or = PC[1];
 	int rows = pc.rows;
@@ -702,6 +729,8 @@ Mat denseBlockHOPC(vector<Mat> &PC,const int blocksize, const int cellsize, cons
 			//block end
 		}
 	}
+	clockend = clock();
+	cout << "denseBlockHOPC finished. Time cost: " << clockend - clockstart << endl;
 	return descriptors;
 }
 
@@ -805,4 +834,17 @@ bool saveMatches(const vector<match_point>& matches, const char* matchfile)
 	}
 	out.close();
 	return true;
+}
+
+void drawMatches(vector<match_point>& matches, size_t num, Mat& Left, Mat& Right)
+{
+	if (num > matches.size())
+		num = matches.size();
+	for (size_t i = 0; i < num; i++)
+	{
+		line(Left, Point(matches[i].left.x - 2, matches[i].left.y), Point(matches[i].left.x + 2, matches[i].left.y), CV_RGB(255, 0, 0), 1, CV_AA, 0);
+		line(Left, Point(matches[i].left.x, matches[i].left.y - 2), Point(matches[i].left.x, matches[i].left.y + 2), CV_RGB(255, 0, 0), 1, CV_AA, 0);
+		line(Right, Point(matches[i].right.x - 2, matches[i].right.y), Point(matches[i].right.x + 2, matches[i].right.y), CV_RGB(255, 0, 0), 1, CV_AA, 0);
+		line(Right, Point(matches[i].right.x, matches[i].right.y - 2), Point(matches[i].right.x, matches[i].right.y + 2), CV_RGB(255, 0, 0), 1, CV_AA, 0);
+	}
 }

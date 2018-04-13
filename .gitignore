@@ -241,3 +241,7 @@ ModelManifest.xml
 # FAKE - F# Make
 .fake/
 /data
+/imatch/m1.jpg
+/imatch/m2.jpg
+/optical_SAR.match
+/visible_infrared.match
