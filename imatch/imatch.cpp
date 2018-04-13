@@ -674,6 +674,7 @@ Mat denseBlockHOPC(vector<Mat> &PC,const int blocksize, const int cellsize, cons
 	int dis_len = blocksize*blocksize*oribins;//每个block描述子的长度
 	double angle_interval = CV_PI / oribins;
 	Mat descriptors=Mat::zeros(rows, cols, CV_32FC(dis_len));
+	//限制角度范围为0-180
 	for (int i = 0; i < rows; i++)
 	{
 		for (int j = 0; j < cols; j++)
@@ -696,14 +697,13 @@ Mat denseBlockHOPC(vector<Mat> &PC,const int blocksize, const int cellsize, cons
 				for (int bj = 0; bj < blocksize; bj++)
 				{
 					//cell
-					int thisori;
 					for (int ci = 0; ci < cellsize; ci++)
 					{
 						for (int cj = 0; cj < cellsize; cj++)
 						{
 							//此像素对应的原图行列号
-							int r = i + bi*blocksize + ci;
-							int c = j + bj*blocksize + cj;
+							int r = i + bi*blocksize + ci - blocksize*cellsize / 2;
+							int c = j + bj*blocksize + cj - blocksize*cellsize / 2;
 							if (r < 0 || c < 0 || r >= rows || c >= cols)
 							{
 								continue;
