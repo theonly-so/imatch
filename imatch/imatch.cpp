@@ -6,7 +6,7 @@
 #include <fstream>
 //#include<fftw3.h>
 using namespace cv;
-matches_HOPC HOPC_match(Mat im_Ref, Mat im_Sen, const char* CP_Check_file, double disthre = 1.5, int tranFlag = 3, int templatesize = 100, int searchRad = 10);
+vector<match_point> HOPC_match(Mat im_Ref, Mat im_Sen, const char* CP_Check_file, const char* match_file, double disthre = 1.5, int tranFlag = 3, int templatesize = 100, int searchRad = 10);
 Mat HarrisValue(Mat &inputimg);
 vector<Point> nonmaxsupptsgrid(Mat& cim, int radius, double thresh, int gridNum, int PTnum);
 vector<Mat> phasecong_hopc(Mat &im, int nscale, int norient);
@@ -14,27 +14,36 @@ Mat denseBlockHOPC(vector<Mat> &PC, const int blocksize = 3, const int cellsize 
 Mat getDesc(const Mat& descriptors, const int row, const int col, const int interval, const int template_radius);
 bool descNormalize(Mat& desc, int type);
 double calculateCoe(const Mat& X, const Mat& Y);
+bool saveMatches(const vector<match_point>& matches, const char* matchfile);
 
 int main()
 {
 	Mat im_Ref = imread("..\\data\\optical_ref.png");
 	Mat im_Sen = imread("..\\data\\SAR_sen.png");
 	const char* checkfile = "..\\data\\OpticaltoSAR_CP.txt";
-	HOPC_match(im_Ref, im_Sen, checkfile);
+	const char* matchfile = "..\\optical_SAR.match";
+	vector<match_point> matches=HOPC_match(im_Ref, im_Sen, checkfile, matchfile);
+	saveMatches(matches, matchfile);
     return 0;
 }
 
-matches_HOPC HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file,double disthre,int tranFlag,int templatesize,int searchRad)
+vector<match_point> HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file, const char* match_file,double disthre,int tranFlag,int templatesize,int searchRad)
 {
+	//函数功能 :
+	//			HOPC方法匹配主入口
 	//输入参数 :
 	//			im_Ref : 参考影像
 	//			im_Sen : 搜索影像
 	//			CP_Check_file : 检查点文件，用来确定搜索区域和判断匹配结果是否正确
+	//			match_file : 匹配结果文件
 	//			disthre : 匹配结果正确性判定阈值，小于该值认为结果正确
 	//			tranFlag : 两张影像间的几何变换方式 0 : 仿射, 1 : 透视, 2 : 二次多项式, 3 : 三次多项式, 默认为3
 	//			templateSize : 模版大小, 必须大于等于 20, 默认 100
 	//			searchRad : 搜索半径, 默认10。 应小于 20
+	//返回值 :
+	//			匹配点对
 
+	cout << "HOPC_match is runing......" << endl;
 	//转变为灰度图像
 	if (im_Ref.channels() == 3)
 	{
@@ -90,7 +99,10 @@ matches_HOPC HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file,double d
 		senpt.push_back(pt2);
 	}
 	//计算两张影像的仿射变换参数
+
 	fin.close();
+	//匹配结果
+	vector<match_point> matches;
 	for (int n = 0; n < xy.size(); n++)
 	{
 		//判断是否在边界内
@@ -119,10 +131,16 @@ matches_HOPC HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file,double d
 		//寻找相关系数最大的点
 		vector<double>::iterator maxvalue = max_element(matchvalue.begin(), matchvalue.end());
 		int maxindex = distance(matchvalue.begin(), maxvalue);
-
+		match_point mt;
+		mt.left = xy[n];
+		mt.right.y = maxindex / (2 * searchRad + 1);
+		mt.right.x = maxindex % (2 * searchRad + 1);
+		mt.measure = *maxvalue;
 	}
+
 	return{};
 }
+
 Mat Gaussian_kernal(int kernel_size, double sigma)
 {
 	const double PI = 3.14159265358979323846;
@@ -330,6 +348,7 @@ vector<Mat> phasecong_hopc(Mat &im, int nscale, int norient)
 	//返回值：
 	//			特征点的行列号
 
+	cout << "phasecong_hopc is running......" << endl;
 	//预定义变量
 	double dThetaOnSigma = 1.7;
 	double minWaveLength = 3;
@@ -504,17 +523,6 @@ vector<Mat> phasecong_hopc(Mat &im, int nscale, int norient)
 				maxAn = max(maxAn, absComplex(EO));
 			}
 			wavelength = wavelength*mult;
-
-			//for (int i = 0; i < 20; i++)
-			//{
-			//	for (int j = 0; j < 20; j++)
-			//	{
-			//		//printf("%lf+%lfi ", EO.at<double>(i, j*2), EO.at<double>(i, j * 2+1));
-			//		printf("%lf ", sumAn_ThisOrient.at<double>(i, j ));
-
-			//	}
-			//	printf("\n");
-			//}
 		}//处理下一个尺度
 		Mat XEnergy = sumE_ThisOrient.mul(sumE_ThisOrient) + sumO_ThisOrient.mul(sumO_ThisOrient);
 		for (int i = 0; i < XEnergy.rows; i++)
@@ -631,6 +639,7 @@ vector<Mat> phasecong_hopc(Mat &im, int nscale, int norient)
 
 Mat denseBlockHOPC(vector<Mat> &PC,const int blocksize, const int cellsize, const int oribins)
 {
+	cout << "denseBlockHOPC is running......" << endl;
 	Mat pc = PC[0];
 	Mat or = PC[1];
 	int rows = pc.rows;
@@ -777,5 +786,23 @@ bool descNormalize(Mat& desc, int type)
 	{
 		normalize(desc.rowRange(i, i + 1), desc.rowRange(i, i + 1), 1, 0, type);
 	}
+	return true;
+}
+
+bool saveMatches(const vector<match_point>& matches, const char* matchfile)
+{
+	cout << "saveMatches is running......" << endl;
+	ofstream out(matchfile);
+	if (!out)
+	{
+		return false;
+	}
+	out << "matches of two images: lx ly rx ry measure" << endl;
+	out << "number of matches = " << matches.size() << endl;
+	for (size_t i = 0; i < matches.size(); i++)
+	{
+		out << matches[i].left.x <<"\t"<< matches[i].left.y << "\t" << matches[i].right.x << "\t" << matches[i].right.y << "\t" << matches[i].measure << endl;
+	}
+	out.close();
 	return true;
 }
