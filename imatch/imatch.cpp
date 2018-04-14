@@ -19,17 +19,23 @@ bool saveMatches(const vector<match_point>& matches, const char* matchfile);
 void drawMatches(vector<match_point>& matches, size_t num, Mat& Left, Mat& Right);
 int main()
 {
-	Mat im_Ref = imread("..\\data\\visible_ref.tif");
-	Mat im_Sen = imread("..\\data\\visible_ref.tif");
+	/*Mat im_Ref = imread("..\\data\\visible_ref.tif");
+	Mat im_Sen = imread("..\\data\\infrared_sen.tif");
 	const char* checkfile = "..\\data\\OpticaltoSAR_CP.txt";
-	const char* matchfile = "..\\visible_infrared.match";
+	const char* matchfile = "..\\visible_infrared.match";*/
+
+	Mat im_Ref = imread("..\\data\\optical_ref.png");
+	Mat im_Sen = imread("..\\data\\SAR_sen.png");
+	const char* checkfile = "..\\data\\OpticaltoSAR_CP.txt";
+	const char* matchfile = "..\\optical_SAR.match";
+
 	vector<match_point> matches=HOPC_match(im_Ref, im_Sen, checkfile, matchfile);
 	//std::sort(matches.begin(), matches.end(), greater<match_point>());
 	saveMatches(matches, matchfile);
 	drawMatches(matches, matches.size(), im_Ref, im_Sen);
-	imshow("m1", im_Ref);
+	/*imshow("m1", im_Ref);
 	imshow("m2", im_Sen);
-	cvWaitKey(0);
+	cvWaitKey(0);*/
 	imwrite("m1.jpg", im_Ref);
 	imwrite("m2.jpg", im_Sen);
     return 0;
@@ -111,13 +117,14 @@ vector<match_point> HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file, 
 	fin.close();
 	//匹配结果
 	vector<match_point> matches;
-	for (int n = 0; n < xy.size(); n++)
+	for (int n = 0; n <xy.size(); n++)
 	{
-		//判断是否在边界内
-
+		clock_t t1, t2;
+		t1 = clock();
+		cout << "NO." << n + 1 << " point is matching......" << endl;
 		Mat des1 = getDesc(denseRef, int(xy[n].y), int(xy[n].x), interval,templateRad);
-		//归一化
-		descNormalize(des1, NORM_L2);
+		//归一化已经完成
+		//descNormalize(des1, NORM_L2);
 		int si, sj;//搜索中心 现在是和左图一样
 		si = (int)xy[n].y;
 		sj = (int)xy[n].x;
@@ -132,7 +139,8 @@ vector<match_point> HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file, 
 				int r = si + i;
 				int c = sj + j;
 				Mat des2=getDesc(denseSen, r, c, interval, templateRad);
-				descNormalize(des2, NORM_L2);
+				//归一化已经完成
+				//descNormalize(des2, NORM_L2);
 				matchvalue[(i+searchRad)*(2 * searchRad + 1)+j+searchRad]=calculateCoe(des1, des2);
 			}
 		}
@@ -145,6 +153,8 @@ vector<match_point> HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file, 
 		mt.right.x = sj + maxindex % (2 * searchRad + 1) - searchRad;
 		mt.measure = *maxvalue;
 		matches.push_back(mt);
+		t2 = clock();
+		cout << "finished. Time cost:" << t2 - t1 <<"  measure="<<*maxvalue<< endl;
 	}
 	return matches;
 }
@@ -724,11 +734,16 @@ Mat denseBlockHOPC(vector<Mat> &PC,const int blocksize, const int cellsize, cons
 						}
 					}
 					//cell end
+					
 				}
 			}
 			//block end
+			//归一化block
+			descNormalize(descriptors.rowRange(i, i + 1).colRange(j, j + 1), NORM_L2);
 		}
+		cout << i<<" ";
 	}
+	cout << endl;
 	clockend = clock();
 	cout << "denseBlockHOPC finished. Time cost: " << clockend - clockstart << endl;
 	return descriptors;
@@ -747,20 +762,23 @@ Mat getDesc(const Mat& descriptors, const int row, const int col, const int inte
 	//返回值：
 	//			9*块描述子 大小的特征向量
 	int len = descriptors.channels();
-	Mat result = Mat::zeros(9, len , CV_32F);
+	int num = cvFloor(2 * template_radius / interval);
+	int rows = num*num;
+	Mat result = Mat::zeros(rows, len , CV_32F);
 	if (row < template_radius || col < template_radius || row >= descriptors.rows - template_radius || col >= descriptors.cols - template_radius)
 	{
 		return result;
 	}
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < num; i++)
 	{
-		for (int j = 0; j < 3; j++)
+		for (int j = 0; j < num; j++)
 		{
+			int r = row - template_radius + i*interval;
+			int c = col - template_radius + j*interval;
 			for (int n = 0; n < len; n++)
 			{
-				int r = row + (i - 1)*interval;
-				int c = (col + (j - 1)*interval)*len + n;
-				result.at<float>(3 * i + j, n) = descriptors.at<float>(r, c);
+				
+				result.at<float>(num * i + j, n) = descriptors.at<float>(r, c*len + n);
 			}
 		}
 	}
@@ -776,26 +794,40 @@ double calculateCoe(const Mat& X,const Mat& Y)
 	//			Y : 向量Y
 	//返回值：
 	//			相关系数
-	double glgr, gl, gr, gl2, gr2;
-	glgr = 0; gl = 0; gr = 0; gl2 = 0; gr2 = 0;
 	int rows = X.rows;
 	int cols = X.cols;
 	int n_channel = X.channels();
+
+	int len = rows*cols*n_channel;
+	Mat XV(1, len, X.type(), X.data);
+	Mat YV(len, 1, Y.type(), Y.data);
+	double glgr, gl, gr, gl2, gr2;
+	//glgr = 0; gl = 0; gr = 0; gl2 = 0; gr2 = 0;
 	typedef float MATTYPE;
-	for (int i = 0; i < rows; i++)
-		for (int j = 0; j < cols; j++)
-		{
-			for (int ch = 0; ch < n_channel; ch++)
-			{
-				int r = i;
-				int c = j*n_channel + ch;
-				glgr += X.at<float>(r,c) * Y.at<float>(r, c);
-				gl += X.at<MATTYPE>(r, c);
-				gr += Y.at<MATTYPE>(r, c);
-				gl2 += X.at<MATTYPE>(r, c)* X.at<MATTYPE>(r, c);
-				gr2 += Y.at<MATTYPE>(r, c) * Y.at<MATTYPE>(r, c);
-			}		
-		}
+	Mat GLGR = XV*YV;
+	Mat GL = XV*Mat::ones(len, 1, X.type());
+	Mat GR = Mat::ones(1, len, X.type())*YV;
+	Mat GL2 = XV*XV.t();
+	Mat GR2 = YV.t()*YV;
+	glgr = GLGR.at<float>(0, 0);
+	gl = GL.at<float>(0, 0);
+	gr = GR.at<float>(0, 0);
+	gl2 = GL2.at<float>(0, 0);
+	gr2 = GR2.at<float>(0, 0);
+	//for (int i = 0; i < rows; i++)
+	//	for (int j = 0; j < cols; j++)
+	//	{
+	//		for (int ch = 0; ch < n_channel; ch++)
+	//		{
+	//			int r = i;
+	//			int c = j*n_channel + ch;
+	//			glgr += X.at<MATTYPE>(r,c) * Y.at<MATTYPE>(r, c);
+	//			gl += X.at<MATTYPE>(r, c);
+	//			gr += Y.at<MATTYPE>(r, c);
+	//			gl2 += X.at<MATTYPE>(r, c)* X.at<MATTYPE>(r, c);
+	//			gr2 += Y.at<MATTYPE>(r, c) * Y.at<MATTYPE>(r, c);
+	//		}		
+	//	}
 	int size = rows*cols*n_channel;
 	double value = (glgr - gl*gr / size) / sqrt((gl2 - gl*gl / size)*(gr2 - gr*gr / size));
 	return value;
@@ -811,10 +843,20 @@ bool descNormalize(Mat& desc, int type)
 	//返回值：
 	//			成功返回true,失败返回false
 	int rows = desc.rows;
+	//for (int i = 0; i < 72; i++)
+	//{
+	//	cout << desc.at<float>(0, i) << " ";
+	//}
+	//cout << endl;
 	for (int i = 0; i < rows; i++)
 	{
 		normalize(desc.rowRange(i, i + 1), desc.rowRange(i, i + 1), 1, 0, type);
 	}
+	for (int i = 0; i < 72; i++)
+	{
+		cout << desc.at<float>(0, i) << " ";
+	}
+	cout << endl;
 	return true;
 }
 
