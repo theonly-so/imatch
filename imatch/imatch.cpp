@@ -101,6 +101,7 @@ vector<match_point> HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file, 
 	SenPC = phasecong_hopc(im_Sen, 3, 6);
 	//计算dense discriptor
 	Mat denseRef = denseBlockHOPC(RefPC);
+	
 	Mat denseSen = denseBlockHOPC(SenPC);
 	//计算两张影像的仿射变换参数
 	vector<Point2f> refpt, senpt;
@@ -156,6 +157,7 @@ vector<match_point> HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file, 
 		t2 = clock();
 		cout << "finished. Time cost:" << t2 - t1 <<"  measure="<<*maxvalue<< endl;
 	}
+	//return{};
 	return matches;
 }
 
@@ -712,24 +714,27 @@ Mat denseBlockHOPC(vector<Mat> &PC,const int blocksize, const int cellsize, cons
 						for (int cj = 0; cj < cellsize; cj++)
 						{
 							//此像素对应的原图行列号
-							int r = i + bi*blocksize + ci - blocksize*cellsize / 2;
-							int c = j + bj*blocksize + cj - blocksize*cellsize / 2;
+							int r = i + bi*blocksize + ci -blocksize*cellsize / 2;
+							int c = j + bj*blocksize + cj -blocksize*cellsize / 2;
 							if (r < 0 || c < 0 || r >= rows || c >= cols)
 							{
 								continue;
 							}
-							int n = cvFloor(or .at<double>(i, j) / angle_interval);
+							int n = cvFloor(or .at<double>(r, c) / angle_interval);
 							//加权累加 双线性插值
 							double k1 = (or .at<double>(i, j) - angle_interval*n) / angle_interval;
 							double k2 = 1 - k1;
-							descriptors.at<float>(i, j*dis_len + (bi*blocksize + bj)*oribins + n)+=(k2*pc.at<double>(r,c));
+							int cd, rd;
+							rd = i;
+							cd = j*dis_len + (bi*blocksize + bj)*oribins + n;
+							descriptors.at<float>(rd, cd)+=(k2*pc.at<double>(r,c));
 							if (n + 1 < oribins)
 							{
-								descriptors.at<float>(i, j*dis_len + (bi*blocksize + bj)*oribins + n + 1) += (k1*pc.at<double>(r, c));
+								descriptors.at<float>(rd, cd) += (k1*pc.at<double>(r, c));
 							}
 							else 
 							{
-								descriptors.at<float>(i, j*dis_len + (bi*blocksize + bj)*oribins + 0) += (k1*pc.at<double>(r, c));
+								descriptors.at<float>(rd, cd) += (k1*pc.at<double>(r, c));
 							}
 						}
 					}
@@ -852,11 +857,11 @@ bool descNormalize(Mat& desc, int type)
 	{
 		normalize(desc.rowRange(i, i + 1), desc.rowRange(i, i + 1), 1, 0, type);
 	}
-	for (int i = 0; i < 72; i++)
+	/*for (int i = 0; i < 72; i++)
 	{
 		cout << desc.at<float>(0, i) << " ";
 	}
-	cout << endl;
+	cout << endl;*/
 	return true;
 }
 
