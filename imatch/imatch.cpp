@@ -7,7 +7,7 @@
 #include<ctime>
 //#include<fftw3.h>
 using namespace cv;
-vector<match_point> HOPC_match(Mat im_Ref, Mat im_Sen, const char* CP_Check_file, const char* match_file, double disthre = 1.5, int tranFlag = 3, int templatesize = 100, int searchRad = 10);
+vector<match_point> HOPC_match(Mat im_Ref, Mat im_Sen, const char* CP_Check_file, double disthre = 1.5, int tranFlag = 3, int templatesize = 100, int searchRad = 10);
 Mat HarrisValue(Mat &inputimg);
 vector<Point> nonmaxsupptsgrid(Mat& cim, int radius, double thresh, int gridNum, int PTnum);
 vector<Mat> phasecong_hopc(Mat &im, int nscale, int norient);
@@ -29,33 +29,31 @@ int main()
 	const char* checkfile = "..\\data\\OpticaltoSAR_CP.txt";
 	const char* matchfile = "..\\optical_SAR.match";
 
-	vector<match_point> matches=HOPC_match(im_Ref, im_Sen, checkfile, matchfile);
+	vector<match_point> matches=HOPC_match(im_Ref, im_Sen, checkfile);
 	//std::sort(matches.begin(), matches.end(), greater<match_point>());
 	saveMatches(matches, matchfile);
 	drawMatches(matches, matches.size(), im_Ref, im_Sen);
-	/*imshow("m1", im_Ref);
-	imshow("m2", im_Sen);
-	cvWaitKey(0);*/
 	imwrite("m1.jpg", im_Ref);
 	imwrite("m2.jpg", im_Sen);
     return 0;
 }
 
-vector<match_point> HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file, const char* match_file,double disthre,int tranFlag,int templatesize,int searchRad)
+//函数功能 :
+//			HOPC方法匹配主入口
+//输入参数 :
+//			im_Ref : 参考影像
+//			im_Sen : 搜索影像
+//			CP_Check_file : 检查点文件，用来确定搜索区域和判断匹配结果是否正确
+//			match_file : 匹配结果文件
+//			disthre : 匹配结果正确性判定阈值，小于该值认为结果正确
+//			tranFlag : 两张影像间的几何变换方式 0 : 仿射, 1 : 透视, 2 : 二次多项式, 3 : 三次多项式, 默认为3
+//			templateSize : 模版大小, 必须大于等于 20, 默认 100
+//			searchRad : 搜索半径, 默认10。 应小于 20
+//返回值 :
+//			匹配点对
+vector<match_point> HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file,double disthre,int tranFlag,int templatesize,int searchRad)
 {
-	//函数功能 :
-	//			HOPC方法匹配主入口
-	//输入参数 :
-	//			im_Ref : 参考影像
-	//			im_Sen : 搜索影像
-	//			CP_Check_file : 检查点文件，用来确定搜索区域和判断匹配结果是否正确
-	//			match_file : 匹配结果文件
-	//			disthre : 匹配结果正确性判定阈值，小于该值认为结果正确
-	//			tranFlag : 两张影像间的几何变换方式 0 : 仿射, 1 : 透视, 2 : 二次多项式, 3 : 三次多项式, 默认为3
-	//			templateSize : 模版大小, 必须大于等于 20, 默认 100
-	//			searchRad : 搜索半径, 默认10。 应小于 20
-	//返回值 :
-	//			匹配点对
+	
 
 	cout << "HOPC_match is runing......" << endl;
 	//转变为灰度图像
@@ -98,9 +96,10 @@ vector<match_point> HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file, 
 	vector<Mat> RefPC, SenPC;
 	int interval = 6;
 	RefPC = phasecong_hopc(im_Ref, 3, 6);
+	Mat denseRef = denseBlockHOPC(RefPC);
 	SenPC = phasecong_hopc(im_Sen, 3, 6);
 	//计算dense discriptor
-	Mat denseRef = denseBlockHOPC(RefPC);
+	
 	
 	Mat denseSen = denseBlockHOPC(SenPC);
 	//计算两张影像的仿射变换参数
@@ -161,7 +160,14 @@ vector<match_point> HOPC_match(Mat im_Ref,Mat im_Sen,const char* CP_Check_file, 
 	return matches;
 }
 
-Mat Gaussian_kernal(int kernel_size, double sigma)
+//函数功能 :
+//			二维高斯模板生成
+//输入参数 :
+//			kernel_size : 模板窗口大小 kernel_size*kernel_size
+//			sigma : 高斯函数sigma参数
+//返回值：
+//			二维高斯模板
+Mat Gaussian_kernal(const int kernel_size, const double sigma)
 {
 	const double PI = 3.14159265358979323846;
 	int m = kernel_size / 2;
@@ -285,16 +291,19 @@ Mat ordfilt2D(const Mat& inputimg, const int order, int size)
 	return output;
 }
 
+//函数功能 :
+//			Harris算子非极大值抑制
+//输入参数 :
+//			cim : 角点强度图像
+//			radius : 非极大值抑制的半径 一般为1-3个像素
+//			thresh : 阈值
+//			gridNum : 格网数
+//			PTnum : 每个格网的特征点个数
+//返回值：
+//			特征点的行列号
 vector<Point> nonmaxsupptsgrid(Mat& cim,int radius,double thresh,int gridNum,int PTnum) 
 {
-	//输入参数 :
-	//			cim : 角点强度图像
-	//			radius : 非极大值抑制的半径 一般为1-3个像素
-	//			thresh : 阈值
-	//			gridNum : 格网数
-	//			PTnum : 每个格网的特征点个数
-	//返回值：
-	//			特征点的行列号
+	
 	vector<Point> xy;
 	int sze = 2 * radius + 1;
 	Mat mx = ordfilt2D(cim, sze*sze, sze);
@@ -345,9 +354,14 @@ vector<Point> nonmaxsupptsgrid(Mat& cim,int radius,double thresh,int gridNum,int
 	return xy;
 }
 
+//函数功能 :
+//			计算复数矩阵的模
+//输入参数 :
+//			input : 复数矩阵(双通道Mat)
+//返回值：
+//			模矩阵
 Mat absComplex(Mat &input)
 {
-	//求复数的模
 	Mat out(input.rows,input.cols, CV_64F);
 	for (int i = 0; i < input.rows; i++)
 	{
@@ -359,17 +373,16 @@ Mat absComplex(Mat &input)
 	return out;
 }
 
+//函数功能 :
+//			计算相位一致性梯度和方向矩阵
+//输入参数 :
+//			im : 待处理的灰度图像
+//			nscale : log gabor尺度的数量
+//			norient : log gabor方向的数量
+//返回值：
+//			梯度矩阵 方向矩阵 (vector形式存储)
 vector<Mat> phasecong_hopc(Mat &im, int nscale, int norient)
 {
-	//函数功能 :
-	//			计算相位一致性梯度和方向矩阵
-	//输入参数 :
-	//			im : 待处理的灰度图像
-	//			nscale : log gabor尺度的数量
-	//			norient : log gabor方向的数量
-	//返回值：
-	//			梯度矩阵 方向矩阵 (vector形式存储)
-
 	cout << "phasecong_hopc is running......" << endl;
 	clock_t clockstart, clockend;
 	clockstart = clock();
@@ -665,16 +678,17 @@ vector<Mat> phasecong_hopc(Mat &im, int nscale, int norient)
 	return rValue;
 }
 
+//函数功能 :
+//			计算整张图像的密集block描述
+//输入参数 :
+//			PC : 幅度和方向
+//			blocksize : 每个block包含 blocksize*blocksize 个cell
+//			cellsize : 每个cell包含
+//返回值：
+//			梯度矩阵 方向矩阵 (vector形式存储)
 Mat denseBlockHOPC(vector<Mat> &PC,const int blocksize, const int cellsize, const int oribins)
 {
-	//函数功能 :
-	//			计算整张图像的密集block描述
-	//输入参数 :
-	//			PC : 幅度和方向
-	//			blocksize : 每个block包含 blocksize*blocksize 个cell
-	//			cellsize : 每个cell包含
-	//返回值：
-	//			梯度矩阵 方向矩阵 (vector形式存储)
+	
 	cout << "denseBlockHOPC is running......" << endl;
 	clock_t clockstart, clockend;
 	clockstart = clock();
@@ -691,14 +705,50 @@ Mat denseBlockHOPC(vector<Mat> &PC,const int blocksize, const int cellsize, cons
 	{
 		for (int j = 0; j < cols; j++)
 		{
-			if (or.at<double>(i, j) < 0)
+			if (or .at<double>(i, j) < 0)
 			{
-				or.at<double>(i, j) += CV_PI;
+				or .at<double>(i, j) += CV_PI;
+			}
+		}
+	}
+	//先建立所有的cells,边界以外的暂时不考虑,均是以像素左上角坐标作为cell的起点
+	Mat allcells = Mat::zeros(rows, cols, CV_32FC(oribins));
+	for (int i = 0; i < rows; i++)
+	{
+		for (int j = 0; j < cols; j++)
+		{
+			for (int ci = 0; ci < cellsize; ci++)
+			{
+				for (int cj = 0; cj < cellsize; cj++)
+				{
+					//此像素对应的原图行列号
+					int r = i + ci ;
+					int c = j + cj ;
+					if (r < 0 || c < 0 || r >= rows || c >= cols)
+					{
+						continue;
+					}
+					int n = cvFloor(or .at<double>(r, c) / angle_interval);
+					//加权累加 双线性插值
+					double k1 = (or .at<double>(i, j) - angle_interval*n) / angle_interval;
+					double k2 = 1 - k1;
+					int cd, rd;
+					rd = i;
+					cd = j*oribins + n;
+					allcells.at<float>(rd, cd) += (k2*pc.at<double>(r, c));
+					if (n + 1 < oribins)
+					{
+						allcells.at<float>(rd, cd) += (k1*pc.at<double>(r, c));
+					}
+					else
+					{
+						allcells.at<float>(rd, cd) += (k1*pc.at<double>(r, c));
+					}
+				}
 			}
 		}
 	}
 	//计算以每个像素为中心的block区域的描述符
-	
 	for (int i = 0; i < rows; i++)
 	{
 		for (int j = 0; j < cols; j++)
@@ -708,36 +758,44 @@ Mat denseBlockHOPC(vector<Mat> &PC,const int blocksize, const int cellsize, cons
 			{
 				for (int bj = 0; bj < blocksize; bj++)
 				{
-					//cell
-					for (int ci = 0; ci < cellsize; ci++)
+					//每个cell的左上角坐标
+					int r = i + bi*blocksize - blocksize*cellsize / 2;
+					int c = j + bj*blocksize - blocksize*cellsize / 2;
+					if (r < 0 || c < 0 || r >= rows || c >= cols)
 					{
-						for (int cj = 0; cj < cellsize; cj++)
-						{
-							//此像素对应的原图行列号
-							int r = i + bi*blocksize + ci -blocksize*cellsize / 2;
-							int c = j + bj*blocksize + cj -blocksize*cellsize / 2;
-							if (r < 0 || c < 0 || r >= rows || c >= cols)
-							{
-								continue;
-							}
-							int n = cvFloor(or .at<double>(r, c) / angle_interval);
-							//加权累加 双线性插值
-							double k1 = (or .at<double>(i, j) - angle_interval*n) / angle_interval;
-							double k2 = 1 - k1;
-							int cd, rd;
-							rd = i;
-							cd = j*dis_len + (bi*blocksize + bj)*oribins + n;
-							descriptors.at<float>(rd, cd)+=(k2*pc.at<double>(r,c));
-							if (n + 1 < oribins)
-							{
-								descriptors.at<float>(rd, cd) += (k1*pc.at<double>(r, c));
-							}
-							else 
-							{
-								descriptors.at<float>(rd, cd) += (k1*pc.at<double>(r, c));
-							}
-						}
+						continue;
 					}
+					memcpy((float*)descriptors.data + i*cols*dis_len + j*dis_len+ (bi*blocksize+bj)*oribins , (float*)allcells.data + r*cols*oribins + c*oribins,sizeof(float)*oribins);
+					//cell
+					//for (int ci = 0; ci < cellsize; ci++)
+					//{
+					//	for (int cj = 0; cj < cellsize; cj++)
+					//	{
+					//		//此像素对应的原图行列号
+					//		int r = i + bi*blocksize + ci -blocksize*cellsize / 2;
+					//		int c = j + bj*blocksize + cj -blocksize*cellsize / 2;
+					//		if (r < 0 || c < 0 || r >= rows || c >= cols)
+					//		{
+					//			continue;
+					//		}
+					//		int n = cvFloor(or .at<double>(r, c) / angle_interval);
+					//		//加权累加 双线性插值
+					//		double k1 = (or .at<double>(i, j) - angle_interval*n) / angle_interval;
+					//		double k2 = 1 - k1;
+					//		int cd, rd;
+					//		rd = i;
+					//		cd = j*dis_len + (bi*blocksize + bj)*oribins + n;
+					//		descriptors.at<float>(rd, cd)+=(k2*pc.at<double>(r,c));
+					//		if (n + 1 < oribins)
+					//		{
+					//			descriptors.at<float>(rd, cd) += (k1*pc.at<double>(r, c));
+					//		}
+					//		else 
+					//		{
+					//			descriptors.at<float>(rd, cd) += (k1*pc.at<double>(r, c));
+					//		}
+					//	}
+					//}
 					//cell end
 					
 				}
@@ -754,18 +812,19 @@ Mat denseBlockHOPC(vector<Mat> &PC,const int blocksize, const int cellsize, cons
 	return descriptors;
 }
 
+//函数功能 :
+//			从整张图的密集特征返回某一个点的描述子
+//输入参数 :
+//			descriptors : 向量X
+//			row : 行
+//			col : 列
+//			interval : 间隔
+//			template_radius : 模板半径
+//返回值：
+//			描述向量，行=根据模版大小和间隔计算包含的blocks，列=每个block描述符的长度
 Mat getDesc(const Mat& descriptors, const int row, const int col, const int interval,const int template_radius)
 {
-	//函数功能 :
-	//			从整张图的密集特征返回某一个点的描述子
-	//输入参数 :
-	//			descriptors : 向量X
-	//			row : 行
-	//			col : 列
-	//			interval : 间隔
-	//			template_radius : 模板半径
-	//返回值：
-	//			9*块描述子 大小的特征向量
+	
 	int len = descriptors.channels();
 	int num = cvFloor(2 * template_radius / interval);
 	int rows = num*num;
@@ -790,15 +849,16 @@ Mat getDesc(const Mat& descriptors, const int row, const int col, const int inte
 	return result;
 }
 
+//函数功能 :
+//			计算相关系数
+//输入参数 :
+//			X : 向量X
+//			Y : 向量Y
+//返回值：
+//			相关系数
 double calculateCoe(const Mat& X,const Mat& Y)
 {
-	//函数功能 :
-	//			计算相关系数
-	//输入参数 :
-	//			X : 向量X
-	//			Y : 向量Y
-	//返回值：
-	//			相关系数
+
 	int rows = X.rows;
 	int cols = X.cols;
 	int n_channel = X.channels();
@@ -819,34 +879,21 @@ double calculateCoe(const Mat& X,const Mat& Y)
 	gr = GR.at<float>(0, 0);
 	gl2 = GL2.at<float>(0, 0);
 	gr2 = GR2.at<float>(0, 0);
-	//for (int i = 0; i < rows; i++)
-	//	for (int j = 0; j < cols; j++)
-	//	{
-	//		for (int ch = 0; ch < n_channel; ch++)
-	//		{
-	//			int r = i;
-	//			int c = j*n_channel + ch;
-	//			glgr += X.at<MATTYPE>(r,c) * Y.at<MATTYPE>(r, c);
-	//			gl += X.at<MATTYPE>(r, c);
-	//			gr += Y.at<MATTYPE>(r, c);
-	//			gl2 += X.at<MATTYPE>(r, c)* X.at<MATTYPE>(r, c);
-	//			gr2 += Y.at<MATTYPE>(r, c) * Y.at<MATTYPE>(r, c);
-	//		}		
-	//	}
 	int size = rows*cols*n_channel;
 	double value = (glgr - gl*gr / size) / sqrt((gl2 - gl*gl / size)*(gr2 - gr*gr / size));
 	return value;
 }
 
+//函数功能 :
+//			归一化特征向量(行归一化)
+//输入参数 :
+//			desc : 特征向量
+//			type : 归一化方法
+//返回值：
+//			成功返回true,失败返回false
 bool descNormalize(Mat& desc, int type)
 {
-	//函数功能 :
-	//			归一化特征向量(行归一化)
-	//输入参数 :
-	//			desc : 特征向量
-	//			type : 归一化方法
-	//返回值：
-	//			成功返回true,失败返回false
+	
 	int rows = desc.rows;
 	//for (int i = 0; i < 72; i++)
 	//{
@@ -889,9 +936,9 @@ void drawMatches(vector<match_point>& matches, size_t num, Mat& Left, Mat& Right
 		num = matches.size();
 	for (size_t i = 0; i < num; i++)
 	{
-		line(Left, Point(matches[i].left.x - 2, matches[i].left.y), Point(matches[i].left.x + 2, matches[i].left.y), CV_RGB(255, 0, 0), 1, CV_AA, 0);
-		line(Left, Point(matches[i].left.x, matches[i].left.y - 2), Point(matches[i].left.x, matches[i].left.y + 2), CV_RGB(255, 0, 0), 1, CV_AA, 0);
-		line(Right, Point(matches[i].right.x - 2, matches[i].right.y), Point(matches[i].right.x + 2, matches[i].right.y), CV_RGB(255, 0, 0), 1, CV_AA, 0);
-		line(Right, Point(matches[i].right.x, matches[i].right.y - 2), Point(matches[i].right.x, matches[i].right.y + 2), CV_RGB(255, 0, 0), 1, CV_AA, 0);
+		line(Left, Point(matches[i].left.x - 2, matches[i].left.y), Point(matches[i].left.x + 2, matches[i].left.y), CV_RGB(255, 0, 0), 1, 8, 0);
+		line(Left, Point(matches[i].left.x, matches[i].left.y - 2), Point(matches[i].left.x, matches[i].left.y + 2), CV_RGB(255, 0, 0), 1, 8, 0);
+		line(Right, Point(matches[i].right.x - 2, matches[i].right.y), Point(matches[i].right.x + 2, matches[i].right.y), CV_RGB(255, 0, 0), 1, 8, 0);
+		line(Right, Point(matches[i].right.x, matches[i].right.y - 2), Point(matches[i].right.x, matches[i].right.y + 2), CV_RGB(255, 0, 0), 1, 8, 0);
 	}
 }
