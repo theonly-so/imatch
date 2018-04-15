@@ -867,7 +867,6 @@ double calculateCoe(const Mat& X,const Mat& Y)
 	Mat XV(1, len, X.type(), X.data);
 	Mat YV(len, 1, Y.type(), Y.data);
 	double glgr, gl, gr, gl2, gr2;
-	//glgr = 0; gl = 0; gr = 0; gl2 = 0; gr2 = 0;
 	typedef float MATTYPE;
 	Mat GLGR = XV*YV;
 	Mat GL = XV*Mat::ones(len, 1, X.type());
